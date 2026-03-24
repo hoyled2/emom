@@ -240,6 +240,11 @@ input[type="range"] {
   border: 1px solid rgba(37, 246, 255, 0.45);
 }
 
+.countdown-toggle {
+  margin-top: 10px;
+  color: var(--text-main);
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
