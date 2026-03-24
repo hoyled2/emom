@@ -26,6 +26,7 @@ let paused = false;
 let lastCompletedMinutes = 0;
 let targetIterations = null;
 let audioContext = null;
+let wakeLockSentinel = null;
 
 const storageKey = "emomSettingsV1";
 
@@ -178,6 +179,47 @@ function setStatus(message) {
   statusEl.textContent = message;
 }
 
+function supportsWakeLock() {
+  return "wakeLock" in navigator;
+}
+
+async function requestWakeLock() {
+  if (!supportsWakeLock()) {
+    return;
+  }
+
+  if (wakeLockSentinel) {
+    return;
+  }
+
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener("release", () => {
+      wakeLockSentinel = null;
+    });
+  } catch {
+    // Ignore failures when policy, battery, or browser conditions deny the lock.
+  }
+}
+
+async function releaseWakeLock() {
+  if (!wakeLockSentinel) {
+    return;
+  }
+
+  try {
+    await wakeLockSentinel.release();
+  } catch {
+    // Ignore errors if the lock has already been released by the browser.
+  } finally {
+    wakeLockSentinel = null;
+  }
+}
+
 function updateControlState() {
   startBtn.disabled = running;
   pauseBtn.disabled = !running;
@@ -233,6 +275,7 @@ function finishRun() {
   paused = false;
   elapsedBeforePause = targetIterations * 60000;
   stopInterval();
+  releaseWakeLock();
   updateReadout();
   updateControlState();
   setStatus(`Done. Completed ${targetIterations} iteration(s).`);
@@ -286,6 +329,7 @@ function startFreshRun() {
   stopInterval();
   timerId = setInterval(tick, 150);
   tick();
+  requestWakeLock();
 
   if (targetIterations === null) {
     setStatus("Running open-ended EMOM.");
@@ -322,6 +366,7 @@ function resetRun() {
   lastCompletedMinutes = 0;
   targetIterations = null;
   stopInterval();
+  releaseWakeLock();
   updateReadout();
   updateControlState();
   setStatus("Ready.");
@@ -393,6 +438,19 @@ resetBtn.addEventListener("click", () => {
 testBeepBtn.addEventListener("click", async () => {
   await ensureAudioContext();
   beep();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running) {
+    requestWakeLock();
+    return;
+  }
+
+  releaseWakeLock();
+});
+
+window.addEventListener("beforeunload", () => {
+  releaseWakeLock();
 });
 
 if (!loadSavedSettings()) {

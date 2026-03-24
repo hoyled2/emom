@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="EMOM logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#090d1d"/>
+      <stop offset="100%" stop-color="#102243"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#25f6ff"/>
+      <stop offset="100%" stop-color="#ff3dbf"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="472" height="472" rx="96" fill="url(#bg)"/>
+
+  <circle cx="256" cy="256" r="162" fill="none" stroke="url(#ring)" stroke-width="30" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="96" fill="none" stroke="#b8ff2c" stroke-width="12" stroke-dasharray="16 16" filter="url(#glow)"/>
+
+  <line x1="256" y1="256" x2="256" y2="130" stroke="#25f6ff" stroke-width="16" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="256" y1="256" x2="334" y2="256" stroke="#ff3dbf" stroke-width="14" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="14" fill="#b8ff2c" filter="url(#glow)"/>
+
+  <text x="256" y="442" text-anchor="middle" font-family="Orbitron, Segoe UI, sans-serif" font-size="54" font-weight="700" fill="#f6f7ff" letter-spacing="6">EMOM</text>
+</svg>
