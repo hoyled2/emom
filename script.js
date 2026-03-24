@@ -35,7 +35,7 @@ const presets = {
     openEnded: false,
     beepType: "sine",
     beepFrequency: 1000,
-    beepDuration: 220,
+    beepDuration: 900,
     beepVolume: 25
   },
   standard20: {
@@ -43,7 +43,7 @@ const presets = {
     openEnded: false,
     beepType: "triangle",
     beepFrequency: 900,
-    beepDuration: 240,
+    beepDuration: 900,
     beepVolume: 28
   },
   endless: {
@@ -51,7 +51,7 @@ const presets = {
     openEnded: true,
     beepType: "square",
     beepFrequency: 1100,
-    beepDuration: 200,
+    beepDuration: 900,
     beepVolume: 30
   }
 };
@@ -71,7 +71,7 @@ function getCurrentSettings() {
       ? beepTypeInput.value
       : "sine",
     beepFrequency: clamp(Number.parseInt(beepFrequencyInput.value, 10), 200, 2000, 1000),
-    beepDuration: clamp(Number.parseInt(beepDurationInput.value, 10), 80, 900, 220),
+    beepDuration: clamp(Number.parseInt(beepDurationInput.value, 10), 80, 900, 900),
     beepVolume: clamp(Number.parseInt(beepVolumeInput.value, 10), 0, 100, 25)
   };
 }
@@ -87,7 +87,7 @@ function applySettings(settings) {
     ? settings.beepType
     : "sine";
   beepFrequencyInput.value = clamp(Number.parseInt(settings.beepFrequency, 10), 200, 2000, 1000);
-  beepDurationInput.value = clamp(Number.parseInt(settings.beepDuration, 10), 80, 900, 220);
+  beepDurationInput.value = clamp(Number.parseInt(settings.beepDuration, 10), 80, 900, 900);
   beepVolumeInput.value = clamp(Number.parseInt(settings.beepVolume, 10), 0, 100, 25);
   iterationsInput.disabled = openEndedInput.checked;
 }
@@ -182,6 +182,7 @@ function updateControlState() {
   startBtn.disabled = running;
   pauseBtn.disabled = !running;
   pauseBtn.textContent = paused ? "Resume" : "Pause";
+  document.body.classList.toggle("focus-mode", running);
 }
 
 function beep() {

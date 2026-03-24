@@ -126,6 +126,10 @@ h1 {
   margin-top: 20px;
 }
 
+.setup-sections {
+  display: block;
+}
+
 .controls > label {
   display: block;
   margin-bottom: 8px;
@@ -298,6 +302,59 @@ button:disabled {
   min-height: 1.2em;
 }
 
+body.focus-mode {
+  padding: 0;
+}
+
+body.focus-mode .app-shell {
+  width: 100%;
+  max-width: none;
+}
+
+body.focus-mode .panel {
+  min-height: 100vh;
+  border-radius: 0;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+body.focus-mode .eyebrow,
+body.focus-mode h1,
+body.focus-mode #setupSections,
+body.focus-mode .status {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body.focus-mode .timer-stack {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+body.focus-mode .countdown {
+  font-size: clamp(4.5rem, 23vw, 15rem);
+}
+
+body.focus-mode .stats {
+  font-size: clamp(1rem, 2.7vw, 1.45rem);
+}
+
+body.focus-mode .actions {
+  justify-content: center;
+  margin-top: 0;
+  padding-top: 14px;
+}
+
 @media (max-width: 520px) {
   .panel {
     padding: 22px 18px;
@@ -316,5 +373,10 @@ button:disabled {
 
   button {
     width: 100%;
+  }
+
+  body.focus-mode .actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
