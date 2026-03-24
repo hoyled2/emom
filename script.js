@@ -13,6 +13,7 @@ const beepTypeInput = document.getElementById("beepType");
 const beepFrequencyInput = document.getElementById("beepFrequency");
 const beepDurationInput = document.getElementById("beepDuration");
 const beepVolumeInput = document.getElementById("beepVolume");
+const speechVoiceInput = document.getElementById("speechVoice");
 const startCountdownInput = document.getElementById("startCountdown");
 const testBeepBtn = document.getElementById("testBeepBtn");
 
@@ -32,6 +33,10 @@ let audioContext = null;
 let wakeLockSentinel = null;
 let startCountdownActive = false;
 let startCountdownToken = 0;
+let hasAnnouncedHalfway = false;
+let hasAnnouncedFinalRound = false;
+let availableSpeechVoices = [];
+let pendingSpeechVoiceURI = "";
 
 const storageKey = "emomSettingsV1";
 
@@ -82,7 +87,8 @@ function getCurrentSettings() {
       : "sine",
     beepFrequency: clamp(Number.parseInt(beepFrequencyInput.value, 10), 200, 2000, 1000),
     beepDuration: clamp(Number.parseInt(beepDurationInput.value, 10), 80, 900, 900),
-    beepVolume: clamp(Number.parseInt(beepVolumeInput.value, 10), 0, 100, 25)
+    beepVolume: clamp(Number.parseInt(beepVolumeInput.value, 10), 0, 100, 25),
+    speechVoice: speechVoiceInput.value || ""
   };
 }
 
@@ -100,6 +106,8 @@ function applySettings(settings) {
   beepFrequencyInput.value = clamp(Number.parseInt(settings.beepFrequency, 10), 200, 2000, 1000);
   beepDurationInput.value = clamp(Number.parseInt(settings.beepDuration, 10), 80, 900, 900);
   beepVolumeInput.value = clamp(Number.parseInt(settings.beepVolume, 10), 0, 100, 25);
+  pendingSpeechVoiceURI = typeof settings.speechVoice === "string" ? settings.speechVoice : "";
+  applySpeechVoiceSelection();
   iterationsInput.disabled = openEndedInput.checked;
 }
 
@@ -301,6 +309,111 @@ function playSessionEndSignal() {
   });
 }
 
+function canSpeak() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function applySpeechVoiceSelection() {
+  if (!speechVoiceInput) {
+    return;
+  }
+
+  const targetVoiceURI = pendingSpeechVoiceURI || speechVoiceInput.value;
+  if (!targetVoiceURI) {
+    speechVoiceInput.value = "";
+    pendingSpeechVoiceURI = "";
+    return;
+  }
+
+  const hasMatchingVoice = availableSpeechVoices.some((voice) => voice.voiceURI === targetVoiceURI);
+  speechVoiceInput.value = hasMatchingVoice ? targetVoiceURI : "";
+  pendingSpeechVoiceURI = "";
+}
+
+function refreshSpeechVoiceOptions() {
+  if (!canSpeak() || !speechVoiceInput) {
+    return;
+  }
+
+  availableSpeechVoices = window
+    .speechSynthesis
+    .getVoices()
+    .slice()
+    .sort((a, b) => {
+      if (a.default && !b.default) {
+        return -1;
+      }
+      if (!a.default && b.default) {
+        return 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+  speechVoiceInput.replaceChildren();
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "System default";
+  speechVoiceInput.append(defaultOption);
+
+  availableSpeechVoices.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} (${voice.lang})${voice.default ? " - default" : ""}`;
+    speechVoiceInput.append(option);
+  });
+
+  applySpeechVoiceSelection();
+}
+
+function getSelectedSpeechVoice() {
+  if (!speechVoiceInput) {
+    return null;
+  }
+
+  const selectedVoiceURI = speechVoiceInput.value;
+  if (!selectedVoiceURI) {
+    return null;
+  }
+
+  return availableSpeechVoices.find((voice) => voice.voiceURI === selectedVoiceURI) || null;
+}
+
+function speakAnnouncement(message) {
+  if (!canSpeak()) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(message);
+  const selectedVoice = getSelectedSpeechVoice();
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  }
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function maybeSpeakProgressAnnouncements(completedMinutes) {
+  if (targetIterations === null || targetIterations < 2) {
+    return;
+  }
+
+  const halfwayCompletedMinutes = Math.floor(targetIterations / 2);
+
+  if (!hasAnnouncedHalfway && halfwayCompletedMinutes > 0 && completedMinutes >= halfwayCompletedMinutes) {
+    speakAnnouncement("You are half way through");
+    hasAnnouncedHalfway = true;
+  }
+
+  if (!hasAnnouncedFinalRound && completedMinutes >= targetIterations - 1) {
+    speakAnnouncement("Final round");
+    hasAnnouncedFinalRound = true;
+  }
+}
+
 async function runStartCountdown() {
   startCountdownActive = true;
   const token = ++startCountdownToken;
@@ -386,6 +499,7 @@ function tick() {
     for (let i = 0; i < newBeeps; i += 1) {
       beep();
     }
+    maybeSpeakProgressAnnouncements(completedMinutes);
     lastCompletedMinutes = completedMinutes;
   }
 
@@ -419,6 +533,8 @@ function startFreshRun() {
   elapsedBeforePause = 0;
   lastCompletedMinutes = 0;
   lastCountdownBeepSecond = -1;
+  hasAnnouncedHalfway = false;
+  hasAnnouncedFinalRound = false;
   running = true;
   paused = false;
   startTime = Date.now();
@@ -432,6 +548,10 @@ function startFreshRun() {
     setStatus("Running open-ended EMOM.");
   } else {
     setStatus(`Running ${targetIterations} iteration(s).`);
+    if (targetIterations === 1) {
+      speakAnnouncement("Final round");
+      hasAnnouncedFinalRound = true;
+    }
   }
 
   updateControlState();
@@ -464,6 +584,8 @@ function resetRun() {
   elapsedBeforePause = 0;
   lastCompletedMinutes = 0;
   lastCountdownBeepSecond = -1;
+  hasAnnouncedHalfway = false;
+  hasAnnouncedFinalRound = false;
   targetIterations = null;
   stopInterval();
   releaseWakeLock();
@@ -501,6 +623,10 @@ beepDurationInput.addEventListener("input", () => {
 beepVolumeInput.addEventListener("input", () => {
   saveSettings();
   syncPresetIndicator();
+});
+
+speechVoiceInput.addEventListener("change", () => {
+  saveSettings();
 });
 
 startCountdownInput.addEventListener("change", () => {
@@ -564,6 +690,11 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("beforeunload", () => {
   releaseWakeLock();
 });
+
+if (canSpeak()) {
+  refreshSpeechVoiceOptions();
+  window.speechSynthesis.addEventListener("voiceschanged", refreshSpeechVoiceOptions);
+}
 
 if (!loadSavedSettings()) {
   applySettings(presets.quick10);
