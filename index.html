@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon EMOM Timer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel">
+        <p class="eyebrow">Workout Clock</p>
+        <h1>EMOM TIMER</h1>
+
+        <div class="timer-stack">
+          <div class="label">Next minute in</div>
+          <div id="countdown" class="countdown">01:00</div>
+          <div class="stats" aria-live="polite">
+            <span>Completed: <strong id="completed">0</strong></span>
+            <span>Elapsed: <strong id="elapsed">00:00</strong></span>
+          </div>
+        </div>
+
+        <form id="controls" class="controls" autocomplete="off">
+          <label for="iterations">Iterations</label>
+          <div class="field-row">
+            <input
+              id="iterations"
+              name="iterations"
+              type="number"
+              min="1"
+              step="1"
+              value="10"
+            />
+            <label class="toggle">
+              <input id="openEnded" name="openEnded" type="checkbox" />
+              <span>Open-ended</span>
+            </label>
+          </div>
+
+          <div class="preset-wrap">
+            <div class="section-title">Presets</div>
+            <div class="preset-grid" id="presetGrid">
+              <button type="button" class="preset-btn" data-preset="quick10">Quick 10</button>
+              <button type="button" class="preset-btn" data-preset="standard20">Standard 20</button>
+              <button type="button" class="preset-btn" data-preset="endless">Endless</button>
+            </div>
+          </div>
+
+          <div class="settings-wrap">
+            <div class="section-title">Beep Settings</div>
+            <div class="settings-grid">
+              <label class="setting-item" for="beepType">
+                <span>Wave</span>
+                <select id="beepType" name="beepType">
+                  <option value="sine">Sine</option>
+                  <option value="square">Square</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="sawtooth">Saw</option>
+                </select>
+              </label>
+
+              <label class="setting-item" for="beepFrequency">
+                <span>Pitch (Hz)</span>
+                <input id="beepFrequency" name="beepFrequency" type="number" min="200" max="2000" step="10" value="1000" />
+              </label>
+
+              <label class="setting-item" for="beepDuration">
+                <span>Duration (ms)</span>
+                <input id="beepDuration" name="beepDuration" type="number" min="80" max="900" step="10" value="220" />
+              </label>
+
+              <label class="setting-item" for="beepVolume">
+                <span>Volume</span>
+                <input id="beepVolume" name="beepVolume" type="range" min="0" max="100" step="1" value="25" />
+              </label>
+            </div>
+
+            <button type="button" id="testBeepBtn" class="ghost-btn">Test Beep</button>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="startBtn">Start</button>
+            <button type="button" id="pauseBtn" disabled>Pause</button>
+            <button type="button" id="resetBtn">Reset</button>
+          </div>
+        </form>
+
+        <p id="status" class="status" aria-live="polite">Ready.</p>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
