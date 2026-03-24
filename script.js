@@ -279,7 +279,7 @@ function playCountdownBeep(secondsLeft) {
   playTone({
     frequency,
     durationMs: 130,
-    volumeScale: 0.9
+    volumeScale: 1.4
   });
 }
 
@@ -309,6 +309,7 @@ async function runStartCountdown() {
 
     countdownEl.textContent = formatClock(seconds);
     setStatus(`Starting in ${seconds}...`);
+    await ensureAudioContext();
     playCountdownBeep(seconds);
     await waitMs(1000);
   }
@@ -326,7 +327,11 @@ async function runStartCountdown() {
 
 async function ensureAudioContext() {
   if (!audioContext) {
-    audioContext = new window.AudioContext();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      return;
+    }
+    audioContext = new AudioContextClass();
   }
   if (audioContext.state === "suspended") {
     await audioContext.resume();
