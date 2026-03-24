@@ -12,6 +12,7 @@ const beepTypeInput = document.getElementById("beepType");
 const beepFrequencyInput = document.getElementById("beepFrequency");
 const beepDurationInput = document.getElementById("beepDuration");
 const beepVolumeInput = document.getElementById("beepVolume");
+const startCountdownInput = document.getElementById("startCountdown");
 const testBeepBtn = document.getElementById("testBeepBtn");
 
 const startBtn = document.getElementById("startBtn");
@@ -28,6 +29,8 @@ let lastCountdownBeepSecond = -1;
 let targetIterations = null;
 let audioContext = null;
 let wakeLockSentinel = null;
+let startCountdownActive = false;
+let startCountdownToken = 0;
 
 const storageKey = "emomSettingsV1";
 
@@ -35,6 +38,7 @@ const presets = {
   quick10: {
     iterations: 10,
     openEnded: false,
+    startCountdown: true,
     beepType: "sine",
     beepFrequency: 1000,
     beepDuration: 900,
@@ -43,6 +47,7 @@ const presets = {
   standard20: {
     iterations: 20,
     openEnded: false,
+    startCountdown: true,
     beepType: "triangle",
     beepFrequency: 900,
     beepDuration: 900,
@@ -51,6 +56,7 @@ const presets = {
   endless: {
     iterations: 10,
     openEnded: true,
+    startCountdown: true,
     beepType: "square",
     beepFrequency: 1100,
     beepDuration: 900,
@@ -69,6 +75,7 @@ function getCurrentSettings() {
   return {
     iterations: clamp(Number.parseInt(iterationsInput.value, 10), 1, 999, 10),
     openEnded: openEndedInput.checked,
+    startCountdown: startCountdownInput.checked,
     beepType: ["sine", "square", "triangle", "sawtooth"].includes(beepTypeInput.value)
       ? beepTypeInput.value
       : "sine",
@@ -85,6 +92,7 @@ function applySettings(settings) {
 
   iterationsInput.value = clamp(Number.parseInt(settings.iterations, 10), 1, 999, 10);
   openEndedInput.checked = Boolean(settings.openEnded);
+  startCountdownInput.checked = settings.startCountdown !== false;
   beepTypeInput.value = ["sine", "square", "triangle", "sawtooth"].includes(settings.beepType)
     ? settings.beepType
     : "sine";
@@ -130,6 +138,7 @@ function syncPresetIndicator() {
     return (
       preset.iterations === current.iterations &&
       preset.openEnded === current.openEnded &&
+      preset.startCountdown === current.startCountdown &&
       preset.beepType === current.beepType &&
       preset.beepFrequency === current.beepFrequency &&
       preset.beepDuration === current.beepDuration &&
@@ -222,7 +231,7 @@ async function releaseWakeLock() {
 }
 
 function updateControlState() {
-  startBtn.disabled = running;
+  startBtn.disabled = running || startCountdownActive;
   pauseBtn.disabled = !running;
   pauseBtn.textContent = paused ? "Resume" : "Pause";
   document.body.classList.toggle("focus-mode", running);
@@ -286,6 +295,35 @@ function playSessionEndSignal() {
   });
 }
 
+async function runStartCountdown() {
+  startCountdownActive = true;
+  const token = ++startCountdownToken;
+  updateControlState();
+
+  for (let seconds = 3; seconds >= 1; seconds -= 1) {
+    if (token !== startCountdownToken) {
+      startCountdownActive = false;
+      updateControlState();
+      return false;
+    }
+
+    countdownEl.textContent = formatClock(seconds);
+    setStatus(`Starting in ${seconds}...`);
+    playCountdownBeep(seconds);
+    await waitMs(1000);
+  }
+
+  if (token !== startCountdownToken) {
+    startCountdownActive = false;
+    updateControlState();
+    return false;
+  }
+
+  startCountdownActive = false;
+  updateControlState();
+  return true;
+}
+
 async function ensureAudioContext() {
   if (!audioContext) {
     audioContext = new window.AudioContext();
@@ -300,6 +338,12 @@ function stopInterval() {
     clearInterval(timerId);
     timerId = null;
   }
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function finishRun() {
@@ -402,6 +446,8 @@ function togglePause() {
 }
 
 function resetRun() {
+  startCountdownToken += 1;
+  startCountdownActive = false;
   running = false;
   paused = false;
   elapsedBeforePause = 0;
@@ -446,6 +492,11 @@ beepVolumeInput.addEventListener("input", () => {
   syncPresetIndicator();
 });
 
+startCountdownInput.addEventListener("change", () => {
+  saveSettings();
+  syncPresetIndicator();
+});
+
 presetGrid.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLButtonElement)) {
@@ -466,6 +517,13 @@ presetGrid.addEventListener("click", (event) => {
 startBtn.addEventListener("click", async () => {
   await ensureAudioContext();
   if (!running) {
+    if (startCountdownInput.checked) {
+      const shouldStart = await runStartCountdown();
+      if (!shouldStart) {
+        updateReadout();
+        return;
+      }
+    }
     startFreshRun();
   }
 });
