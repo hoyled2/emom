@@ -1,5 +1,6 @@
 const countdownEl = document.getElementById("countdown");
 const completedEl = document.getElementById("completed");
+const remainingEl = document.getElementById("remaining");
 const elapsedEl = document.getElementById("elapsed");
 const statusEl = document.getElementById("status");
 
@@ -181,6 +182,11 @@ function updateReadout() {
   }
 
   completedEl.textContent = completedMinutes.toString();
+  if (targetIterations === null) {
+    remainingEl.textContent = "\u221E";
+  } else {
+    remainingEl.textContent = Math.max(0, targetIterations - completedMinutes).toString();
+  }
   elapsedEl.textContent = formatClock(elapsedSeconds);
   countdownEl.textContent = formatClock(secondsToNextMinute);
 }
