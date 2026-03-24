@@ -16,6 +16,7 @@ const beepVolumeInput = document.getElementById("beepVolume");
 const speechVoiceInput = document.getElementById("speechVoice");
 const startCountdownInput = document.getElementById("startCountdown");
 const testBeepBtn = document.getElementById("testBeepBtn");
+const testVoiceBtn = document.getElementById("testVoiceBtn");
 
 const startBtn = document.getElementById("startBtn");
 const pauseBtn = document.getElementById("pauseBtn");
@@ -379,16 +380,32 @@ function getSelectedSpeechVoice() {
   return availableSpeechVoices.find((voice) => voice.voiceURI === selectedVoiceURI) || null;
 }
 
+function primeSpeechSynthesis() {
+  if (!canSpeak()) {
+    return;
+  }
+
+  refreshSpeechVoiceOptions();
+  window.speechSynthesis.resume();
+}
+
 function speakAnnouncement(message) {
   if (!canSpeak()) {
     return;
   }
 
-  window.speechSynthesis.cancel();
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
+  window.speechSynthesis.resume();
   const utterance = new SpeechSynthesisUtterance(message);
   const selectedVoice = getSelectedSpeechVoice();
   if (selectedVoice) {
     utterance.voice = selectedVoice;
+    utterance.lang = selectedVoice.lang;
+  } else {
+    utterance.lang = document.documentElement.lang || "en-US";
   }
   utterance.rate = 1;
   utterance.pitch = 1;
@@ -401,16 +418,21 @@ function maybeSpeakProgressAnnouncements(completedMinutes) {
     return;
   }
 
+  const announcements = [];
   const halfwayCompletedMinutes = Math.floor(targetIterations / 2);
 
   if (!hasAnnouncedHalfway && halfwayCompletedMinutes > 0 && completedMinutes >= halfwayCompletedMinutes) {
-    speakAnnouncement("You are half way through");
+    announcements.push("You are half way through");
     hasAnnouncedHalfway = true;
   }
 
   if (!hasAnnouncedFinalRound && completedMinutes >= targetIterations - 1) {
-    speakAnnouncement("Final round");
+    announcements.push("Final round");
     hasAnnouncedFinalRound = true;
+  }
+
+  if (announcements.length > 0) {
+    speakAnnouncement(announcements.join(". "));
   }
 }
 
@@ -653,6 +675,7 @@ presetGrid.addEventListener("click", (event) => {
 
 startBtn.addEventListener("click", async () => {
   await ensureAudioContext();
+  primeSpeechSynthesis();
   if (!running) {
     if (startCountdownInput.checked) {
       const shouldStart = await runStartCountdown();
@@ -676,6 +699,12 @@ resetBtn.addEventListener("click", () => {
 testBeepBtn.addEventListener("click", async () => {
   await ensureAudioContext();
   beep();
+});
+
+testVoiceBtn.addEventListener("click", () => {
+  primeSpeechSynthesis();
+  speakAnnouncement("Voice test. You are half way through. Final round.");
+  setStatus("Voice test played.");
 });
 
 document.addEventListener("visibilitychange", () => {
