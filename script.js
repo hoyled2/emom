@@ -24,6 +24,7 @@ let elapsedBeforePause = 0;
 let running = false;
 let paused = false;
 let lastCompletedMinutes = 0;
+let lastCountdownBeepSecond = -1;
 let targetIterations = null;
 let audioContext = null;
 let wakeLockSentinel = null;
@@ -227,21 +228,26 @@ function updateControlState() {
   document.body.classList.toggle("focus-mode", running);
 }
 
-function beep() {
+function playTone(options = {}) {
   if (!audioContext) {
     return;
   }
 
   const settings = getCurrentSettings();
-  const volume = Math.max(settings.beepVolume / 100, 0.0001);
-  const durationSeconds = settings.beepDuration / 1000;
+  const frequency = Number.isFinite(options.frequency) ? options.frequency : settings.beepFrequency;
+  const waveform = options.waveform || settings.beepType;
+  const durationMs = Number.isFinite(options.durationMs) ? options.durationMs : settings.beepDuration;
+  const volumeScale = Number.isFinite(options.volumeScale) ? options.volumeScale : 1;
+
+  const volume = Math.max((settings.beepVolume / 100) * volumeScale, 0.0001);
+  const durationSeconds = Math.max(durationMs, 30) / 1000;
 
   const now = audioContext.currentTime;
   const osc = audioContext.createOscillator();
   const gain = audioContext.createGain();
 
-  osc.type = settings.beepType;
-  osc.frequency.setValueAtTime(settings.beepFrequency, now);
+  osc.type = waveform;
+  osc.frequency.setValueAtTime(frequency, now);
 
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
@@ -252,6 +258,32 @@ function beep() {
 
   osc.start(now);
   osc.stop(now + durationSeconds + 0.01);
+}
+
+function beep() {
+  playTone();
+}
+
+function playCountdownBeep(secondsLeft) {
+  const pitchStep = 3 - secondsLeft;
+  const frequency = 780 + pitchStep * 90;
+  playTone({
+    frequency,
+    durationMs: 130,
+    volumeScale: 0.9
+  });
+}
+
+function playSessionEndSignal() {
+  [0, 170, 340].forEach((delayMs, index) => {
+    window.setTimeout(() => {
+      playTone({
+        frequency: 1100 + index * 90,
+        durationMs: 110,
+        volumeScale: 1
+      });
+    }, delayMs);
+  });
 }
 
 async function ensureAudioContext() {
@@ -271,6 +303,7 @@ function stopInterval() {
 }
 
 function finishRun() {
+  playSessionEndSignal();
   running = false;
   paused = false;
   elapsedBeforePause = targetIterations * 60000;
@@ -283,7 +316,15 @@ function finishRun() {
 
 function tick() {
   const elapsedMs = getElapsedMs();
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const secondsIntoMinute = elapsedSeconds % 60;
+  const secondsToNextMinute = 60 - secondsIntoMinute;
   const completedMinutes = Math.floor(elapsedMs / 60000);
+
+  if (secondsToNextMinute <= 3 && secondsToNextMinute >= 1 && elapsedSeconds !== lastCountdownBeepSecond) {
+    playCountdownBeep(secondsToNextMinute);
+    lastCountdownBeepSecond = elapsedSeconds;
+  }
 
   if (completedMinutes > lastCompletedMinutes) {
     const newBeeps = completedMinutes - lastCompletedMinutes;
@@ -322,6 +363,7 @@ function startFreshRun() {
 
   elapsedBeforePause = 0;
   lastCompletedMinutes = 0;
+  lastCountdownBeepSecond = -1;
   running = true;
   paused = false;
   startTime = Date.now();
@@ -364,6 +406,7 @@ function resetRun() {
   paused = false;
   elapsedBeforePause = 0;
   lastCompletedMinutes = 0;
+  lastCountdownBeepSecond = -1;
   targetIterations = null;
   stopInterval();
   releaseWakeLock();
