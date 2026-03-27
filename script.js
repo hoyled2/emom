@@ -7,9 +7,7 @@ const statusEl = document.getElementById("status");
 const iterationsInput = document.getElementById("iterations");
 const roundLengthInput = document.getElementById("roundLength");
 const openEndedInput = document.getElementById("openEnded");
-const presetGrid = document.getElementById("presetGrid");
 const presetButtons = Array.from(document.querySelectorAll(".preset-btn"));
-const roundPresetGrid = document.getElementById("roundPresetGrid");
 const roundPresetButtons = Array.from(document.querySelectorAll(".preset-btn[data-round-length]"));
 
 const beepTypeInput = document.getElementById("beepType");
@@ -249,6 +247,45 @@ function getRoundLengthMs() {
 
 function setStatus(message) {
   statusEl.textContent = message;
+}
+
+function bindPress(element, handler) {
+  if (!element) {
+    return;
+  }
+
+  let lastTouchEndAt = 0;
+
+  const runHandler = () => {
+    try {
+      const result = handler();
+      if (result && typeof result.then === "function") {
+        result.catch((error) => {
+          setStatus(`Error: ${error && error.message ? error.message : "Action failed."}`);
+        });
+      }
+    } catch (error) {
+      setStatus(`Error: ${error && error.message ? error.message : "Action failed."}`);
+    }
+  };
+
+  element.addEventListener("click", (event) => {
+    if (Date.now() - lastTouchEndAt < 500) {
+      return;
+    }
+    event.preventDefault();
+    runHandler();
+  });
+
+  element.addEventListener(
+    "touchend",
+    (event) => {
+      lastTouchEndAt = Date.now();
+      event.preventDefault();
+      runHandler();
+    },
+    { passive: false }
+  );
 }
 
 function supportsWakeLock() {
@@ -656,32 +693,26 @@ startCountdownInput.addEventListener("change", () => {
   syncRoundPresetIndicator();
 });
 
-presetGrid.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
-    return;
-  }
+presetButtons
+  .filter((button) => button.dataset.preset)
+  .forEach((button) => {
+    bindPress(button, () => {
+      const presetName = button.dataset.preset;
+      if (!presetName || !presets[presetName]) {
+        return;
+      }
 
-  const presetName = target.dataset.preset;
-  if (!presetName || !presets[presetName]) {
-    return;
-  }
+      applySettings(presets[presetName]);
+      setActivePreset(presetName);
+      syncRoundPresetIndicator();
+      saveSettings();
+      setStatus(`Preset selected: ${button.textContent}.`);
+    });
+  });
 
-  applySettings(presets[presetName]);
-  setActivePreset(presetName);
-  syncRoundPresetIndicator();
-  saveSettings();
-  setStatus(`Preset selected: ${target.textContent}.`);
-});
-
-if (roundPresetGrid) {
-  roundPresetGrid.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLButtonElement)) {
-      return;
-    }
-
-    const roundLength = Number.parseInt(target.dataset.roundLength || "", 10);
+roundPresetButtons.forEach((button) => {
+  bindPress(button, () => {
+    const roundLength = Number.parseInt(button.dataset.roundLength || "", 10);
     if (!Number.isFinite(roundLength)) {
       return;
     }
@@ -693,9 +724,9 @@ if (roundPresetGrid) {
     setStatus(`Round length set to ${roundLength} minute(s).`);
     updateReadout();
   });
-}
+});
 
-startBtn.addEventListener("click", async () => {
+bindPress(startBtn, async () => {
   await ensureAudioContext();
   primeSpeechSynthesis();
   if (!running) {
@@ -710,23 +741,34 @@ startBtn.addEventListener("click", async () => {
   }
 });
 
-pauseBtn.addEventListener("click", () => {
+bindPress(pauseBtn, () => {
   togglePause();
 });
 
-resetBtn.addEventListener("click", () => {
+bindPress(resetBtn, () => {
   resetRun();
 });
 
-testBeepBtn.addEventListener("click", async () => {
+bindPress(testBeepBtn, async () => {
   await ensureAudioContext();
   beep();
 });
 
-testVoiceBtn.addEventListener("click", () => {
+bindPress(testVoiceBtn, () => {
   primeSpeechSynthesis();
   speakAnnouncement("Voice test. You are half way through. Final round.");
   setStatus("Voice test played.");
+});
+
+window.addEventListener("error", (event) => {
+  const message = event && event.message ? event.message : "Unexpected script error.";
+  setStatus(`Error: ${message}`);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event && event.reason;
+  const message = reason && reason.message ? reason.message : "Unhandled async error.";
+  setStatus(`Error: ${message}`);
 });
 
 document.addEventListener("visibilitychange", () => {
