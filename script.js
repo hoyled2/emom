@@ -118,7 +118,7 @@ function applySettings(settings) {
 function saveSettings() {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(getCurrentSettings()));
-  } catch {
+  } catch (error) {
     // Ignore write errors in private browsing or blocked storage scenarios.
   }
 }
@@ -133,7 +133,7 @@ function loadSavedSettings() {
     const parsed = JSON.parse(raw);
     applySettings(parsed);
     return true;
-  } catch {
+  } catch (error) {
     return false;
   }
 }
@@ -273,7 +273,7 @@ async function requestWakeLock() {
     wakeLockSentinel.addEventListener("release", () => {
       wakeLockSentinel = null;
     });
-  } catch {
+  } catch (error) {
     // Ignore failures when policy, battery, or browser conditions deny the lock.
   }
 }
@@ -285,7 +285,7 @@ async function releaseWakeLock() {
 
   try {
     await wakeLockSentinel.release();
-  } catch {
+  } catch (error) {
     // Ignore errors if the lock has already been released by the browser.
   } finally {
     wakeLockSentinel = null;

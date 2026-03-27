@@ -47,10 +47,16 @@ body {
   overflow: hidden;
 }
 
+.panel > * {
+  position: relative;
+  z-index: 1;
+}
+
 .panel::after {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
   background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.04), transparent);
   transform: translateX(-120%);
@@ -272,6 +278,8 @@ button {
   letter-spacing: 0.02em;
   font-family: inherit;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 120ms ease, box-shadow 140ms ease, opacity 120ms ease;
 }
 
