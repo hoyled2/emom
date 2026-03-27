@@ -20,7 +20,7 @@
         <h1>EMOM TIMER</h1>
 
         <div class="timer-stack">
-          <div class="label">Next minute in</div>
+          <div class="label">Next round in</div>
           <div id="countdown" class="countdown">01:00</div>
           <div class="stats" aria-live="polite">
             <span>Completed: <strong id="completed">0</strong></span>
@@ -45,6 +45,29 @@
                 <input id="openEnded" name="openEnded" type="checkbox" />
                 <span>Open-ended</span>
               </label>
+            </div>
+
+            <label for="roundLength">Round length (minutes)</label>
+            <div class="field-row">
+              <input
+                id="roundLength"
+                name="roundLength"
+                type="number"
+                min="1"
+                max="60"
+                step="1"
+                value="1"
+              />
+            </div>
+
+            <div class="preset-wrap">
+              <div class="section-title">Round Presets</div>
+              <div class="preset-grid" id="roundPresetGrid">
+                <button type="button" class="preset-btn" data-round-length="1">1 min</button>
+                <button type="button" class="preset-btn" data-round-length="2">2 min</button>
+                <button type="button" class="preset-btn" data-round-length="3">3 min</button>
+                <button type="button" class="preset-btn" data-round-length="5">5 min</button>
+              </div>
             </div>
 
             <div class="preset-wrap">
@@ -84,12 +107,6 @@
                   <input id="beepVolume" name="beepVolume" type="range" min="0" max="100" step="1" value="25" />
                 </label>
 
-                <label class="setting-item" for="speechVoice">
-                  <span>Voice</span>
-                  <select id="speechVoice" name="speechVoice">
-                    <option value="">System default</option>
-                  </select>
-                </label>
               </div>
 
               <label class="toggle countdown-toggle">

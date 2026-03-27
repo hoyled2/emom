@@ -5,15 +5,17 @@ const elapsedEl = document.getElementById("elapsed");
 const statusEl = document.getElementById("status");
 
 const iterationsInput = document.getElementById("iterations");
+const roundLengthInput = document.getElementById("roundLength");
 const openEndedInput = document.getElementById("openEnded");
 const presetGrid = document.getElementById("presetGrid");
 const presetButtons = Array.from(document.querySelectorAll(".preset-btn"));
+const roundPresetGrid = document.getElementById("roundPresetGrid");
+const roundPresetButtons = Array.from(document.querySelectorAll(".preset-btn[data-round-length]"));
 
 const beepTypeInput = document.getElementById("beepType");
 const beepFrequencyInput = document.getElementById("beepFrequency");
 const beepDurationInput = document.getElementById("beepDuration");
 const beepVolumeInput = document.getElementById("beepVolume");
-const speechVoiceInput = document.getElementById("speechVoice");
 const startCountdownInput = document.getElementById("startCountdown");
 const testBeepBtn = document.getElementById("testBeepBtn");
 const testVoiceBtn = document.getElementById("testVoiceBtn");
@@ -30,20 +32,20 @@ let paused = false;
 let lastCompletedMinutes = 0;
 let lastCountdownBeepSecond = -1;
 let targetIterations = null;
+let activeRoundLengthSeconds = 60;
 let audioContext = null;
 let wakeLockSentinel = null;
 let startCountdownActive = false;
 let startCountdownToken = 0;
 let hasAnnouncedHalfway = false;
 let hasAnnouncedFinalRound = false;
-let availableSpeechVoices = [];
-let pendingSpeechVoiceURI = "";
 
 const storageKey = "emomSettingsV1";
 
 const presets = {
   quick10: {
     iterations: 10,
+    roundLength: 1,
     openEnded: false,
     startCountdown: true,
     beepType: "sine",
@@ -53,6 +55,7 @@ const presets = {
   },
   standard20: {
     iterations: 20,
+    roundLength: 1,
     openEnded: false,
     startCountdown: true,
     beepType: "triangle",
@@ -62,6 +65,7 @@ const presets = {
   },
   endless: {
     iterations: 10,
+    roundLength: 1,
     openEnded: true,
     startCountdown: true,
     beepType: "square",
@@ -81,6 +85,7 @@ function clamp(value, min, max, fallback) {
 function getCurrentSettings() {
   return {
     iterations: clamp(Number.parseInt(iterationsInput.value, 10), 1, 999, 10),
+    roundLength: clamp(Number.parseInt(roundLengthInput.value, 10), 1, 60, 1),
     openEnded: openEndedInput.checked,
     startCountdown: startCountdownInput.checked,
     beepType: ["sine", "square", "triangle", "sawtooth"].includes(beepTypeInput.value)
@@ -88,8 +93,7 @@ function getCurrentSettings() {
       : "sine",
     beepFrequency: clamp(Number.parseInt(beepFrequencyInput.value, 10), 200, 2000, 1000),
     beepDuration: clamp(Number.parseInt(beepDurationInput.value, 10), 80, 900, 900),
-    beepVolume: clamp(Number.parseInt(beepVolumeInput.value, 10), 0, 100, 25),
-    speechVoice: speechVoiceInput.value || ""
+    beepVolume: clamp(Number.parseInt(beepVolumeInput.value, 10), 0, 100, 25)
   };
 }
 
@@ -99,6 +103,7 @@ function applySettings(settings) {
   }
 
   iterationsInput.value = clamp(Number.parseInt(settings.iterations, 10), 1, 999, 10);
+  roundLengthInput.value = clamp(Number.parseInt(settings.roundLength, 10), 1, 60, 1);
   openEndedInput.checked = Boolean(settings.openEnded);
   startCountdownInput.checked = settings.startCountdown !== false;
   beepTypeInput.value = ["sine", "square", "triangle", "sawtooth"].includes(settings.beepType)
@@ -107,8 +112,6 @@ function applySettings(settings) {
   beepFrequencyInput.value = clamp(Number.parseInt(settings.beepFrequency, 10), 200, 2000, 1000);
   beepDurationInput.value = clamp(Number.parseInt(settings.beepDuration, 10), 80, 900, 900);
   beepVolumeInput.value = clamp(Number.parseInt(settings.beepVolume, 10), 0, 100, 25);
-  pendingSpeechVoiceURI = typeof settings.speechVoice === "string" ? settings.speechVoice : "";
-  applySpeechVoiceSelection();
   iterationsInput.disabled = openEndedInput.checked;
 }
 
@@ -136,9 +139,42 @@ function loadSavedSettings() {
 }
 
 function setActivePreset(presetName) {
-  presetButtons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.preset === presetName);
+  presetButtons
+    .filter((button) => button.dataset.preset)
+    .forEach((button) => {
+      button.classList.toggle("active", button.dataset.preset === presetName);
+    });
+}
+
+function setActiveRoundPreset(roundLength) {
+  roundPresetButtons.forEach((button) => {
+    const buttonRoundLength = Number.parseInt(button.dataset.roundLength || "", 10);
+    button.classList.toggle("active", Number.isFinite(roundLength) && buttonRoundLength === roundLength);
   });
+}
+
+function syncRoundPresetIndicator() {
+  const current = getCurrentSettings();
+  const matchingButton = roundPresetButtons.find((button) => {
+    const buttonRoundLength = Number.parseInt(button.dataset.roundLength || "", 10);
+    return buttonRoundLength === current.roundLength;
+  });
+
+  if (!matchingButton) {
+    setActiveRoundPreset(null);
+    return;
+  }
+
+  const matchedRoundLength = Number.parseInt(matchingButton.dataset.roundLength || "", 10);
+  setActiveRoundPreset(matchedRoundLength);
+}
+
+function sanitizeRoundLengthInput() {
+  roundLengthInput.value = clamp(Number.parseInt(roundLengthInput.value, 10), 1, 60, 1);
+}
+
+function sanitizeIterationsInput() {
+  iterationsInput.value = clamp(Number.parseInt(iterationsInput.value, 10), 1, 999, 10);
 }
 
 function syncPresetIndicator() {
@@ -147,6 +183,7 @@ function syncPresetIndicator() {
     const [name, preset] = entry;
     return (
       preset.iterations === current.iterations &&
+      preset.roundLength === current.roundLength &&
       preset.openEnded === current.openEnded &&
       preset.startCountdown === current.startCountdown &&
       preset.beepType === current.beepType &&
@@ -182,22 +219,32 @@ function getElapsedMs() {
 
 function updateReadout() {
   const elapsedMs = getElapsedMs();
+  const roundLengthMs = running || paused ? activeRoundLengthSeconds * 1000 : getRoundLengthMs();
+  const roundLengthSeconds = Math.floor(roundLengthMs / 1000);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const completedMinutes = Math.floor(elapsedMs / 60000);
+  const completedRounds = Math.floor(elapsedMs / roundLengthMs);
 
-  let secondsToNextMinute = 60 - (elapsedSeconds % 60);
-  if (secondsToNextMinute === 60 && elapsedSeconds > 0 && elapsedSeconds % 60 !== 0) {
-    secondsToNextMinute = 0;
+  let secondsToNextRound = roundLengthSeconds - (elapsedSeconds % roundLengthSeconds);
+  if (secondsToNextRound === roundLengthSeconds && elapsedSeconds > 0 && elapsedSeconds % roundLengthSeconds !== 0) {
+    secondsToNextRound = 0;
   }
 
-  completedEl.textContent = completedMinutes.toString();
+  completedEl.textContent = completedRounds.toString();
   if (targetIterations === null) {
     remainingEl.textContent = "\u221E";
   } else {
-    remainingEl.textContent = Math.max(0, targetIterations - completedMinutes).toString();
+    remainingEl.textContent = Math.max(0, targetIterations - completedRounds).toString();
   }
   elapsedEl.textContent = formatClock(elapsedSeconds);
-  countdownEl.textContent = formatClock(secondsToNextMinute);
+  countdownEl.textContent = formatClock(secondsToNextRound);
+}
+
+function getRoundLengthSeconds() {
+  return clamp(Number.parseInt(roundLengthInput.value, 10), 1, 60, 1) * 60;
+}
+
+function getRoundLengthMs() {
+  return getRoundLengthSeconds() * 1000;
 }
 
 function setStatus(message) {
@@ -314,78 +361,11 @@ function canSpeak() {
   return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 }
 
-function applySpeechVoiceSelection() {
-  if (!speechVoiceInput) {
-    return;
-  }
-
-  const targetVoiceURI = pendingSpeechVoiceURI || speechVoiceInput.value;
-  if (!targetVoiceURI) {
-    speechVoiceInput.value = "";
-    pendingSpeechVoiceURI = "";
-    return;
-  }
-
-  const hasMatchingVoice = availableSpeechVoices.some((voice) => voice.voiceURI === targetVoiceURI);
-  speechVoiceInput.value = hasMatchingVoice ? targetVoiceURI : "";
-  pendingSpeechVoiceURI = "";
-}
-
-function refreshSpeechVoiceOptions() {
-  if (!canSpeak() || !speechVoiceInput) {
-    return;
-  }
-
-  availableSpeechVoices = window
-    .speechSynthesis
-    .getVoices()
-    .slice()
-    .sort((a, b) => {
-      if (a.default && !b.default) {
-        return -1;
-      }
-      if (!a.default && b.default) {
-        return 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-  speechVoiceInput.replaceChildren();
-
-  const defaultOption = document.createElement("option");
-  defaultOption.value = "";
-  defaultOption.textContent = "System default";
-  speechVoiceInput.append(defaultOption);
-
-  availableSpeechVoices.forEach((voice) => {
-    const option = document.createElement("option");
-    option.value = voice.voiceURI;
-    option.textContent = `${voice.name} (${voice.lang})${voice.default ? " - default" : ""}`;
-    speechVoiceInput.append(option);
-  });
-
-  applySpeechVoiceSelection();
-}
-
-function getSelectedSpeechVoice() {
-  if (!speechVoiceInput) {
-    return null;
-  }
-
-  const selectedVoiceURI = speechVoiceInput.value;
-  if (!selectedVoiceURI) {
-    return null;
-  }
-
-  return availableSpeechVoices.find((voice) => voice.voiceURI === selectedVoiceURI) || null;
-}
-
 function primeSpeechSynthesis() {
   if (!canSpeak()) {
     return;
   }
 
-  refreshSpeechVoiceOptions();
   window.speechSynthesis.resume();
 }
 
@@ -400,13 +380,7 @@ function speakAnnouncement(message) {
 
   window.speechSynthesis.resume();
   const utterance = new SpeechSynthesisUtterance(message);
-  const selectedVoice = getSelectedSpeechVoice();
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
-    utterance.lang = selectedVoice.lang;
-  } else {
-    utterance.lang = document.documentElement.lang || "en-US";
-  }
+  utterance.lang = document.documentElement.lang || "en-US";
   utterance.rate = 1;
   utterance.pitch = 1;
   utterance.volume = 1;
@@ -496,7 +470,7 @@ function finishRun() {
   playSessionEndSignal();
   running = false;
   paused = false;
-  elapsedBeforePause = targetIterations * 60000;
+  elapsedBeforePause = targetIterations * activeRoundLengthSeconds * 1000;
   stopInterval();
   releaseWakeLock();
   updateReadout();
@@ -506,26 +480,27 @@ function finishRun() {
 
 function tick() {
   const elapsedMs = getElapsedMs();
+  const roundLengthSeconds = activeRoundLengthSeconds;
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const secondsIntoMinute = elapsedSeconds % 60;
-  const secondsToNextMinute = 60 - secondsIntoMinute;
-  const completedMinutes = Math.floor(elapsedMs / 60000);
+  const secondsIntoRound = elapsedSeconds % roundLengthSeconds;
+  const secondsToNextRound = roundLengthSeconds - secondsIntoRound;
+  const completedRounds = Math.floor(elapsedMs / (roundLengthSeconds * 1000));
 
-  if (secondsToNextMinute <= 3 && secondsToNextMinute >= 1 && elapsedSeconds !== lastCountdownBeepSecond) {
-    playCountdownBeep(secondsToNextMinute);
+  if (secondsToNextRound <= 3 && secondsToNextRound >= 1 && elapsedSeconds !== lastCountdownBeepSecond) {
+    playCountdownBeep(secondsToNextRound);
     lastCountdownBeepSecond = elapsedSeconds;
   }
 
-  if (completedMinutes > lastCompletedMinutes) {
-    const newBeeps = completedMinutes - lastCompletedMinutes;
+  if (completedRounds > lastCompletedMinutes) {
+    const newBeeps = completedRounds - lastCompletedMinutes;
     for (let i = 0; i < newBeeps; i += 1) {
       beep();
     }
-    maybeSpeakProgressAnnouncements(completedMinutes);
-    lastCompletedMinutes = completedMinutes;
+    maybeSpeakProgressAnnouncements(completedRounds);
+    lastCompletedMinutes = completedRounds;
   }
 
-  if (targetIterations !== null && completedMinutes >= targetIterations) {
+  if (targetIterations !== null && completedRounds >= targetIterations) {
     finishRun();
     return;
   }
@@ -552,8 +527,9 @@ function startFreshRun() {
     return;
   }
 
+  activeRoundLengthSeconds = getRoundLengthSeconds();
   elapsedBeforePause = 0;
-  lastCompletedMinutes = 0;
+  lastCompletedMinutes = -1;
   lastCountdownBeepSecond = -1;
   hasAnnouncedHalfway = false;
   hasAnnouncedFinalRound = false;
@@ -609,6 +585,7 @@ function resetRun() {
   hasAnnouncedHalfway = false;
   hasAnnouncedFinalRound = false;
   targetIterations = null;
+  activeRoundLengthSeconds = getRoundLengthSeconds();
   stopInterval();
   releaseWakeLock();
   updateReadout();
@@ -620,40 +597,63 @@ openEndedInput.addEventListener("change", () => {
   iterationsInput.disabled = openEndedInput.checked;
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 iterationsInput.addEventListener("input", () => {
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
+});
+
+iterationsInput.addEventListener("blur", () => {
+  sanitizeIterationsInput();
+  saveSettings();
+  syncPresetIndicator();
+  syncRoundPresetIndicator();
+});
+
+roundLengthInput.addEventListener("input", () => {
+  saveSettings();
+  syncPresetIndicator();
+  syncRoundPresetIndicator();
+});
+
+roundLengthInput.addEventListener("blur", () => {
+  sanitizeRoundLengthInput();
+  saveSettings();
+  syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 beepTypeInput.addEventListener("change", () => {
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 beepFrequencyInput.addEventListener("input", () => {
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 beepDurationInput.addEventListener("input", () => {
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 beepVolumeInput.addEventListener("input", () => {
   saveSettings();
   syncPresetIndicator();
-});
-
-speechVoiceInput.addEventListener("change", () => {
-  saveSettings();
+  syncRoundPresetIndicator();
 });
 
 startCountdownInput.addEventListener("change", () => {
   saveSettings();
   syncPresetIndicator();
+  syncRoundPresetIndicator();
 });
 
 presetGrid.addEventListener("click", (event) => {
@@ -669,9 +669,31 @@ presetGrid.addEventListener("click", (event) => {
 
   applySettings(presets[presetName]);
   setActivePreset(presetName);
+  syncRoundPresetIndicator();
   saveSettings();
   setStatus(`Preset selected: ${target.textContent}.`);
 });
+
+if (roundPresetGrid) {
+  roundPresetGrid.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    const roundLength = Number.parseInt(target.dataset.roundLength || "", 10);
+    if (!Number.isFinite(roundLength)) {
+      return;
+    }
+
+    roundLengthInput.value = clamp(roundLength, 1, 60, 1);
+    saveSettings();
+    syncPresetIndicator();
+    setActiveRoundPreset(roundLength);
+    setStatus(`Round length set to ${roundLength} minute(s).`);
+    updateReadout();
+  });
+}
 
 startBtn.addEventListener("click", async () => {
   await ensureAudioContext();
@@ -720,14 +742,10 @@ window.addEventListener("beforeunload", () => {
   releaseWakeLock();
 });
 
-if (canSpeak()) {
-  refreshSpeechVoiceOptions();
-  window.speechSynthesis.addEventListener("voiceschanged", refreshSpeechVoiceOptions);
-}
-
 if (!loadSavedSettings()) {
   applySettings(presets.quick10);
 }
 updateReadout();
 updateControlState();
 syncPresetIndicator();
+syncRoundPresetIndicator();
