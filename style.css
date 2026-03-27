@@ -29,6 +29,10 @@ body {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
 }
 
+.margin-top-small {
+  margin-top: 12px;
+}
+
 .app-shell {
   width: min(100%, 640px);
 }
